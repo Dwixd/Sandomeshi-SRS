@@ -70,10 +70,26 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+    implementation("com.squareup.okhttp3:logging-interceptor:4.11.0")
 
     // Google Gemini AI SDK
     implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
 
     // Coroutines untuk menjalankan proses AI di background agar UI tidak freeze
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+
+    // DataStore
+    implementation("androidx.datastore:datastore-preferences:1.1.2")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    implementation("androidx.compose.material:material-icons-extended")
+
+    // Navigation Compose
+    implementation("androidx.navigation:navigation-compose:2.8.7")
+
+    // Retrofit & Gson
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+
+    // Coil for Image Loading
+    implementation("io.coil-kt:coil-compose:2.6.0")
 }

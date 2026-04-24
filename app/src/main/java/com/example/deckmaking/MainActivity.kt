@@ -8,7 +8,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.draw.clip
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -22,6 +24,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
 import com.example.deckmaking.ui.theme.DeckMakingTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -30,14 +38,153 @@ import kotlinx.coroutines.withContext
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val settingsManager = SettingsManager(this)
         enableEdgeToEdge()
         setContent {
             DeckMakingTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    DeckGeneratorScreen(
-                        modifier = Modifier.padding(innerPadding)
-                    )
+                val settingsViewModel: SettingsViewModel = viewModel(
+                    factory = SettingsViewModel.Factory(settingsManager)
+                )
+                val sharedViewModel: SharedViewModel = viewModel()
+                MainScreen(settingsViewModel, sharedViewModel)
+            }
+        }
+    }
+}
+
+@Composable
+fun MainScreen(settingsViewModel: SettingsViewModel, sharedViewModel: SharedViewModel) {
+    val navController = rememberNavController()
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
+    
+    // Hoisting ViewModels to Activity scope to prevent state loss during tab switching
+    val activity = LocalContext.current as ComponentActivity
+    val discoverViewModel: DiscoverViewModel = viewModel(activity)
+    val createViewModel: CreateViewModel = viewModel(activity)
+
+    val items = listOf(
+        BottomNavItem.Discover,
+        BottomNavItem.Create,
+        BottomNavItem.Settings
+    )
+
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        bottomBar = {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 16.dp)
+            ) {
+                NavigationBar(
+                    modifier = Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(32.dp)),
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    tonalElevation = 8.dp,
+                    windowInsets = WindowInsets(0.dp)
+                ) {
+                    items.forEach { item ->
+                        NavigationBarItem(
+                            icon = { Icon(item.icon, contentDescription = item.title) },
+                            label = { Text(item.title) },
+                            selected = currentRoute == item.route,
+                            colors = NavigationBarItemDefaults.colors(
+                                indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                                selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            onClick = {
+                                navController.navigate(item.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            }
+                        )
+                    }
                 }
+            }
+        }
+    ) { innerPadding ->
+        fun getRouteIndex(route: String?): Int {
+            return when (route) {
+                BottomNavItem.Discover.route -> 0
+                BottomNavItem.Create.route -> 1
+                BottomNavItem.Settings.route -> 2
+                else -> 0
+            }
+        }
+
+        NavHost(
+            navController = navController,
+            startDestination = BottomNavItem.Discover.route,
+            modifier = Modifier.fillMaxSize(),
+            enterTransition = {
+                val initialIndex = getRouteIndex(initialState.destination.route)
+                val targetIndex = getRouteIndex(targetState.destination.route)
+                if (targetIndex > initialIndex) {
+                    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(300))
+                } else {
+                    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(300))
+                }
+            },
+            exitTransition = {
+                val initialIndex = getRouteIndex(initialState.destination.route)
+                val targetIndex = getRouteIndex(targetState.destination.route)
+                if (targetIndex > initialIndex) {
+                    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(300))
+                } else {
+                    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(300))
+                }
+            }
+        ) {
+            composable(BottomNavItem.Discover.route) {
+                DiscoverScreen(
+                    viewModel = discoverViewModel,
+                    onNavigateToCreate = {
+                        navController.navigate(BottomNavItem.Create.route) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    sharedViewModel = sharedViewModel,
+                    contentPadding = innerPadding
+                )
+            }
+            composable(BottomNavItem.Create.route) {
+                DeckGeneratorScreen(
+                    viewModel = createViewModel,
+                    settingsViewModel = settingsViewModel,
+                    sharedViewModel = sharedViewModel,
+                    onNavigateToSettings = {
+                        navController.navigate(BottomNavItem.Settings.route) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    contentPadding = innerPadding
+                )
+            }
+            composable(BottomNavItem.Settings.route) {
+                SettingsScreen(
+                    viewModel = settingsViewModel,
+                    onBack = {
+                        navController.popBackStack()
+                    },
+                    contentPadding = innerPadding
+                )
             }
         }
     }
@@ -45,33 +192,53 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DeckGeneratorScreen(modifier: Modifier = Modifier) {
+fun DeckGeneratorScreen(
+    viewModel: CreateViewModel,
+    settingsViewModel: SettingsViewModel,
+    sharedViewModel: SharedViewModel,
+    onNavigateToSettings: () -> Unit,
+    contentPadding: PaddingValues,
+    modifier: Modifier = Modifier
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    
+    // UI State from ViewModel
+    val selectedFileUri by viewModel.selectedFileUri.collectAsState()
+    val extractedText by viewModel.extractedText.collectAsState()
+    val selectedLevel by viewModel.selectedLevel.collectAsState()
+    val selectedTypes by viewModel.selectedTypes.collectAsState()
+    val generatedJsonResult by viewModel.generatedJsonResult.collectAsState()
+    val isProcessing by viewModel.isProcessing.collectAsState()
+    val isGenerating by viewModel.isGenerating.collectAsState()
+    val errorLog by viewModel.errorLog.collectAsState()
 
-    var selectedFileUri by remember { mutableStateOf<Uri?>(null) }
-    var extractedText by remember { mutableStateOf("") }
-    var isProcessing by remember { mutableStateOf(false) }
+    // Settings
 
-    // Selection state
-    var selectedLevel by remember { mutableStateOf("N5") }
+    val apiKey by settingsViewModel.apiKey.collectAsState()
+    val selectedModel by settingsViewModel.selectedModel.collectAsState()
+    val temperature by settingsViewModel.temperature.collectAsState()
+    val deckLanguage by settingsViewModel.deckLanguage.collectAsState()
+
+    val subtitleFromShared by sharedViewModel.subtitleTextToProcess.collectAsState()
+
+    // Sync from SharedViewModel
+    LaunchedEffect(subtitleFromShared) {
+        if (subtitleFromShared.isNotEmpty()) {
+            viewModel.setExtractedText(subtitleFromShared)
+            viewModel.setSelectedFileUri(null)
+            sharedViewModel.clearSubtitleText()
+        }
+    }
+
     val levels = listOf("N5", "N4", "N3", "N2", "N1")
-
-    var selectedTypes by remember { mutableStateOf(setOf("Vocabulary", "Kanji", "Grammar")) }
     val itemTypes = listOf("Vocabulary", "Kanji", "Grammar")
-
-    // State for Gemini AI process
-    var isGenerating by remember { mutableStateOf(false) }
-    var generatedJsonResult by remember { mutableStateOf("") }
+    val itemTypesDisplay = mapOf("Vocabulary" to "Kosakata", "Kanji" to "Kanji", "Grammar" to "Tata Bahasa")
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
-        if (uri != null) {
-            selectedFileUri = uri
-            extractedText = "" // Reset extracted text when a new file is picked
-            generatedJsonResult = "" // Reset AI result
-        }
+        viewModel.setSelectedFileUri(uri)
     }
 
     val exportLauncher = rememberLauncherForActivityResult(
@@ -99,263 +266,302 @@ fun DeckGeneratorScreen(modifier: Modifier = Modifier) {
         }
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp)
-            .verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Top
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.surfaceContainer
     ) {
-        Text(
-            text = "Anki Deck Generator",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center
-        )
+        Column(modifier = Modifier.fillMaxSize()) {
+            // FIXED HEADER
+            Text(
+                text = "Buat Dek Anki",
+                style = MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .statusBarsPadding()
+                    .padding(horizontal = 24.dp, vertical = 16.dp)
+                    .align(Alignment.Start)
+            )
 
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Button(
-            onClick = {
-                filePickerLauncher.launch(arrayOf("*/*"))
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Pilih File Subtitle (.ass / .srt)")
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        selectedFileUri?.let { uri ->
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
+            // SCROLLABLE CONTENT
+            Column(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(bottom = contentPadding.calculateBottomPadding() + 32.dp)
+                    .padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Top
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "File Terpilih:",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = uri.path ?: "Unknown path",
-                        style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
             Button(
                 onClick = {
-                    scope.launch {
-                        isProcessing = true
-                        val raw = withContext(Dispatchers.IO) {
-                            SubtitleParser.readTextFromUri(context, uri)
-                        }
-
-                        if (raw != null) {
-                            val clean = withContext(Dispatchers.IO) {
-                                if (raw.contains("Dialogue:", ignoreCase = true)) {
-                                    SubtitleParser.parseAss(raw)
-                                } else {
-                                    SubtitleParser.parseSrt(raw)
-                                }
-                            }
-                            extractedText = clean
-                        }
-                        isProcessing = false
-                    }
+                    filePickerLauncher.launch(arrayOf("*/*"))
                 },
-                enabled = !isProcessing && !isGenerating,
                 modifier = Modifier.fillMaxWidth(),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.secondary
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             ) {
-                if (isProcessing) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = MaterialTheme.colorScheme.onSecondary,
-                        strokeWidth = 2.dp
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text("Memproses...")
-                } else {
-                    Text("Ekstrak Teks Subtitle")
-                }
-            }
-        }
-
-        if (extractedText.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Text(
-                text = "Preview Teks (200 karakter pertama):",
-                style = MaterialTheme.typography.titleSmall,
-                modifier = Modifier.align(Alignment.Start)
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.medium,
-                tonalElevation = 2.dp,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-            ) {
-                Text(
-                    text = extractedText.take(200).let { if (extractedText.length > 200) "$it..." else it },
-                    modifier = Modifier.padding(16.dp),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Dynamic Selection Section
-            Text(
-                text = "Select JLPT Level:",
-                style = MaterialTheme.typography.titleSmall,
-                modifier = Modifier.align(Alignment.Start)
-            )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                levels.forEach { level ->
-                    FilterChip(
-                        selected = selectedLevel == level,
-                        onClick = { selectedLevel = level },
-                        label = { Text(level) }
-                    )
-                }
+                Text("Pilih File Subtitle (.ass / .srt)")
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Text(
-                text = "Select Types:",
-                style = MaterialTheme.typography.titleSmall,
-                modifier = Modifier.align(Alignment.Start)
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Start,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                itemTypes.forEach { type ->
-                    FilterChip(
-                        selected = selectedTypes.contains(type),
-                        onClick = {
-                            selectedTypes = if (selectedTypes.contains(type)) {
-                                selectedTypes - type
-                            } else {
-                                selectedTypes + type
-                            }
-                        },
-                        label = { Text(type) },
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Button(
-                onClick = {
-                    scope.launch {
-                        isGenerating = true
-                        val result = withContext(Dispatchers.IO) {
-                            GeminiService.generateFlashcards(
-                                apiKey = "AQ.Ab8RN6LGnOTuLvoDeT13Zu1sDx7Z0mrt56rtaMUyj6ReDGatHg",
-                                inputText = extractedText,
-                                targetLevel = selectedLevel,
-                                targetTypes = selectedTypes.toList()
-                            )
-                        }
-                        generatedJsonResult = result ?: "Error: Gagal memproses data AI."
-                        isGenerating = false
+            selectedFileUri?.let { uri ->
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh
+                ) {
+                    Column(modifier = Modifier.padding(24.dp)) {
+                        Text(
+                            text = "File Terpilih:",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = uri.path ?: "Unknown path",
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
-                },
-                enabled = !isGenerating && !isProcessing && selectedTypes.isNotEmpty(),
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.tertiary
-                )
-            ) {
-                if (isGenerating) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = MaterialTheme.colorScheme.onTertiary,
-                        strokeWidth = 2.dp
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text("Generating AI Deck...")
-                } else {
-                    Text("Generate Flashcards (Gemini AI)")
                 }
-            }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = "Pembuatan dek mungkin akan membutuhkan waktu yang lebih lama, mohon tunggu",
-                style = MaterialTheme.typography.bodySmall,
-                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            if (generatedJsonResult.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(24.dp))
 
                 Button(
                     onClick = {
-                        exportLauncher.launch("deck_${selectedLevel}_${System.currentTimeMillis()}.txt")
+                        scope.launch {
+                            viewModel.setProcessing(true)
+                            val raw = withContext(Dispatchers.IO) {
+                                SubtitleParser.readTextFromUri(context, uri)
+                            }
+
+                            if (raw != null) {
+                                val clean = withContext(Dispatchers.IO) {
+                                    if (raw.contains("Dialogue:", ignoreCase = true)) {
+                                        SubtitleParser.parseAss(raw)
+                                    } else {
+                                        SubtitleParser.parseSrt(raw)
+                                    }
+                                }
+                                viewModel.setExtractedText(clean)
+                            }
+                            viewModel.setProcessing(false)
+                        }
                     },
+                    enabled = !isProcessing && !isGenerating,
                     modifier = Modifier.fillMaxWidth(),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        containerColor = MaterialTheme.colorScheme.secondary
                     )
                 ) {
-                    Text("Export to Anki (.txt)")
+                    if (isProcessing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = MaterialTheme.colorScheme.onSecondary,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("Memproses...")
+                    } else {
+                        Text("Ekstrak Teks Subtitle")
+                    }
                 }
+            }
 
-                Spacer(modifier = Modifier.height(24.dp))
+            if (extractedText.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(32.dp))
 
                 Text(
-                    text = "JSON Result:",
+                    text = "Preview Teks (200 karakter pertama):",
                     style = MaterialTheme.typography.titleSmall,
-                    modifier = Modifier.align(Alignment.Start)
+                    modifier = Modifier.align(Alignment.Start),
+                    fontWeight = FontWeight.Bold
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.medium,
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    tonalElevation = 1.dp
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh
                 ) {
                     Text(
-                        text = generatedJsonResult,
-                        modifier = Modifier.padding(16.dp),
-                        style = MaterialTheme.typography.bodySmall,
+                        text = extractedText.take(200).let { if (extractedText.length > 200) "$it..." else it },
+                        modifier = Modifier.padding(24.dp),
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Text(
+                    text = "Pilih Level JLPT:",
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.align(Alignment.Start),
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    levels.forEach { level ->
+                        FilterChip(
+                            selected = selectedLevel == level,
+                            onClick = { viewModel.setSelectedLevel(level) },
+                            label = { Text(level) },
+                            shape = MaterialTheme.shapes.extraLarge
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Text(
+                    text = "Pilih Tipe:",
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.align(Alignment.Start),
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Start,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    itemTypes.forEach { type ->
+                        FilterChip(
+                            selected = selectedTypes.contains(type),
+                            onClick = {
+                                val newTypes = if (selectedTypes.contains(type)) {
+                                    selectedTypes - type
+                                } else {
+                                    selectedTypes + type
+                                }
+                                viewModel.setSelectedTypes(newTypes)
+                            },
+                            label = { Text(itemTypesDisplay[type] ?: type) },
+                            modifier = Modifier.padding(end = 8.dp),
+                            shape = MaterialTheme.shapes.extraLarge
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
+
+                Text(
+                    text = "Pembuatan Dek akan membutuhkan banyak waktu, Anda bisa membiarkan aplikasi berjalan di latar belakang.",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                )
+
+                Button(
+                    onClick = {
+                        if (apiKey.isBlank()) {
+                            Toast.makeText(context, "Silakan masukkan API Key di menu Settings", Toast.LENGTH_LONG).show()
+                            onNavigateToSettings()
+                            return@Button
+                        }
+                        
+                        viewModel.generateFlashcards(
+                            context = context,
+                            apiKey = apiKey,
+                            inputText = extractedText,
+                            targetLevel = selectedLevel,
+                            targetTypes = selectedTypes.toList(),
+                            modelName = selectedModel,
+                            temperature = temperature,
+                            deckLanguage = deckLanguage
+                        )
+                    },
+                    enabled = !isGenerating && !isProcessing && selectedTypes.isNotEmpty(),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                ) {
+                    if (isGenerating) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("Membangun Dek AI...")
+                        }
+                    } else {
+                        Text("Buat Flashcard (Gemini AI)")
+                    }
+                }
+
+                if (generatedJsonResult.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    if (!generatedJsonResult.startsWith("Error:") && !generatedJsonResult.startsWith("Chunk failures:")) {
+                        Button(
+                            onClick = {
+                                exportLauncher.launch("deck_${selectedLevel}_${System.currentTimeMillis()}.txt")
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        ) {
+                            Text("Export to Anki (.txt)")
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(32.dp))
+
+                    Text(
+                        text = if (errorLog != null) "Detail Kesalahan:" else "Hasil JSON:",
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.align(Alignment.Start),
+                        fontWeight = FontWeight.Bold,
+                        color = if (errorLog != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+                        color = if (errorLog != null) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceContainerHigh
+                    ) {
+                        Text(
+                            text = generatedJsonResult,
+                            modifier = Modifier.padding(24.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (errorLog != null) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
             }
         }
     }
 }
+}
+
+

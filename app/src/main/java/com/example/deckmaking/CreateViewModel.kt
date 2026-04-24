@@ -6,6 +6,8 @@ import android.content.Context
 import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -102,6 +104,12 @@ class CreateViewModel : ViewModel() {
     }
 
     fun updateNotification(context: Context, total: Int, current: Int, isFinished: Boolean = false, isError: Boolean = false) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                return
+            }
+        }
+
         createNotificationChannel(context)
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 

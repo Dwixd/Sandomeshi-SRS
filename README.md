@@ -26,7 +26,9 @@
 | Jelajah Subtitle | Pembuat Dek | Pengaturan |
 | :---: | :---: | :---: |
 | <img width="1080" height="2288" alt="Screenshot_20260424-084141" src="https://github.com/user-attachments/assets/3bad6f23-494f-445e-89ee-8605810c028f" />
- | *(Tambahkan screenshot di sini)* | *(Tambahkan screenshot di sini)* |
+ | <img width="1080" height="2279" alt="Screenshot_20260424-084206" src="https://github.com/user-attachments/assets/b0220893-9f9d-4f5a-97d0-03dd00ca2fb1" />
+ | <img width="1080" height="2400" alt="Screenshot_20260424-084220" src="https://github.com/user-attachments/assets/87d62270-f7a9-47c8-974f-4f2bcc632bfe" />
+ |
 
 ---
 

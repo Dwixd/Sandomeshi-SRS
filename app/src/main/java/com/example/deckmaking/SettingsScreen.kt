@@ -32,7 +32,7 @@ fun SettingsScreen(
     var apiKeyInput by remember(apiKey) { mutableStateOf(apiKey) }
     var expanded by remember { mutableStateOf(false) }
     var langExpanded by remember { mutableStateOf(false) }
-    val models = listOf("gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash")
+    val models = listOf("gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash", "gemini-2.5-flash", "gemini-3.0-flash", "gemini-3.0-pro")
     val languages = listOf("Inggris", "Indonesia")
 
     Surface(

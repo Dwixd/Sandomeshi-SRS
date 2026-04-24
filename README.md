@@ -25,7 +25,7 @@
 
 | Jelajah Subtitle | Pembuat Dek | Pengaturan |
 | :---: | :---: | :---: |
-| <img src="https://github.com/user-attachments/assets/3bad6f23-494f-445e-89ee-8605810c028f" width="250" alt="Jelajah Subtitle"> | <img src="https://github.com/user-attachments/assets/b0220893-9f9d-4f5a-97d0-03dd00ca2fb1" width="250" alt="Pembuat Dek"> | <img width="1080" height="2285" alt="Screenshot_20260424-084940" src="https://github.com/user-attachments/assets/627d0e0b-7e64-43a9-acdf-fa8481258755" /> |
+| <img src="https://github.com/user-attachments/assets/3bad6f23-494f-445e-89ee-8605810c028f" width="250" alt="Jelajah Subtitle"> | <img src="https://github.com/user-attachments/assets/b0220893-9f9d-4f5a-97d0-03dd00ca2fb1" width="250" alt="Pembuat Dek"> | <img src="https://github.com/user-attachments/assets/627d0e0b-7e64-43a9-acdf-fa8481258755" width="250" alt="Pengaturan"> |
 
 ---
 

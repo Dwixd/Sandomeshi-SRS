@@ -25,7 +25,8 @@
 
 | Jelajah Subtitle | Pembuat Dek | Pengaturan |
 | :---: | :---: | :---: |
-| *(Tambahkan screenshot di sini)* | *(Tambahkan screenshot di sini)* | *(Tambahkan screenshot di sini)* |
+| <img width="1080" height="2288" alt="Screenshot_20260424-084141" src="https://github.com/user-attachments/assets/3bad6f23-494f-445e-89ee-8605810c028f" />
+ | *(Tambahkan screenshot di sini)* | *(Tambahkan screenshot di sini)* |
 
 ---
 

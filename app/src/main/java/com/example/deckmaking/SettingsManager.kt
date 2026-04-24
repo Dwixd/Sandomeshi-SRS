@@ -20,7 +20,7 @@ class SettingsManager(context: Context) {
     }
 
     val apiKeyFlow: Flow<String> = dataStore.data.map { it[API_KEY] ?: "" }
-    val selectedModelFlow: Flow<String> = dataStore.data.map { it[SELECTED_MODEL] ?: "gemini-1.5-flash" }
+    val selectedModelFlow: Flow<String> = dataStore.data.map { it[SELECTED_MODEL] ?: "gemini-2.5-flash" }
     val temperatureFlow: Flow<Float> = dataStore.data.map { it[TEMPERATURE] ?: 0.2f }
     val deckLanguageFlow: Flow<String> = dataStore.data.map { it[DECK_LANGUAGE] ?: "Inggris" }
 

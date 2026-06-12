@@ -30,6 +30,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.deckmaking.data.WordDatabase
+import com.example.deckmaking.data.WordRepository
 import com.example.deckmaking.ui.theme.DeckMakingTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -59,11 +61,22 @@ fun MainScreen(settingsViewModel: SettingsViewModel, sharedViewModel: SharedView
     val currentRoute = navBackStackEntry?.destination?.route
     
     // Hoisting ViewModels to Activity scope to prevent state loss during tab switching
+    val context = LocalContext.current.applicationContext
+    val repository = remember { WordRepository(WordDatabase.getDatabase(context).wordDao()) }
+    
     val activity = LocalContext.current as ComponentActivity
+    val inventoryViewModel: InventoryViewModel = viewModel(
+        activity,
+        factory = InventoryViewModel.Factory(repository)
+    )
     val discoverViewModel: DiscoverViewModel = viewModel(activity)
-    val createViewModel: CreateViewModel = viewModel(activity)
+    val createViewModel: CreateViewModel = viewModel(
+        activity,
+        factory = CreateViewModel.Factory(repository)
+    )
 
     val items = listOf(
+        BottomNavItem.Inventory,
         BottomNavItem.Discover,
         BottomNavItem.Create,
         BottomNavItem.Settings
@@ -114,9 +127,10 @@ fun MainScreen(settingsViewModel: SettingsViewModel, sharedViewModel: SharedView
     ) { innerPadding ->
         fun getRouteIndex(route: String?): Int {
             return when (route) {
-                BottomNavItem.Discover.route -> 0
-                BottomNavItem.Create.route -> 1
-                BottomNavItem.Settings.route -> 2
+                BottomNavItem.Inventory.route -> 0
+                BottomNavItem.Discover.route -> 1
+                BottomNavItem.Create.route -> 2
+                BottomNavItem.Settings.route -> 3
                 else -> 0
             }
         }
@@ -144,6 +158,12 @@ fun MainScreen(settingsViewModel: SettingsViewModel, sharedViewModel: SharedView
                 }
             }
         ) {
+            composable(BottomNavItem.Inventory.route) {
+                InventoryScreen(
+                    viewModel = inventoryViewModel,
+                    contentPadding = innerPadding
+                )
+            }
             composable(BottomNavItem.Discover.route) {
                 DiscoverScreen(
                     viewModel = discoverViewModel,
@@ -209,6 +229,7 @@ fun DeckGeneratorScreen(
     val selectedLevel by viewModel.selectedLevel.collectAsState()
     val selectedTypes by viewModel.selectedTypes.collectAsState()
     val generatedJsonResult by viewModel.generatedJsonResult.collectAsState()
+    val itemCount by viewModel.itemCount.collectAsState()
     val isProcessing by viewModel.isProcessing.collectAsState()
     val isGenerating by viewModel.isGenerating.collectAsState()
     val errorLog by viewModel.errorLog.collectAsState()
@@ -535,7 +556,7 @@ fun DeckGeneratorScreen(
                     Spacer(modifier = Modifier.height(32.dp))
 
                     Text(
-                        text = if (errorLog != null) "Detail Kesalahan:" else "Hasil JSON:",
+                        text = if (errorLog != null) "Detail Kesalahan:" else if (itemCount > 0) "Hasil JSON ($itemCount Item):" else "Hasil JSON:",
                         style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier.align(Alignment.Start),
                         fontWeight = FontWeight.Bold,

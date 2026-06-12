@@ -10,13 +10,18 @@ import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.deckmaking.data.WordEntity
+import com.example.deckmaking.data.WordRepository
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
-class CreateViewModel : ViewModel() {
+class CreateViewModel(private val repository: WordRepository) : ViewModel() {
     private val _selectedFileUri = MutableStateFlow<Uri?>(null)
     val selectedFileUri: StateFlow<Uri?> = _selectedFileUri.asStateFlow()
 
@@ -41,6 +46,9 @@ class CreateViewModel : ViewModel() {
     private val _errorLog = MutableStateFlow<String?>(null)
     val errorLog: StateFlow<String?> = _errorLog.asStateFlow()
 
+    private val _itemCount = MutableStateFlow(0)
+    val itemCount: StateFlow<Int> = _itemCount.asStateFlow()
+
     private val _progress = MutableStateFlow(0f)
 
     val progress: StateFlow<Float> = _progress.asStateFlow()
@@ -53,6 +61,7 @@ class CreateViewModel : ViewModel() {
         if (uri != null) {
             _extractedText.value = ""
             _generatedJsonResult.value = ""
+            _itemCount.value = 0
         }
     }
 
@@ -154,6 +163,7 @@ class CreateViewModel : ViewModel() {
             setGenerating(true)
             setProgress(0f)
             setErrorLog(null)
+            _itemCount.value = 0
             updateNotification(context, 100, 0) // Initial progress state
 
             val result = GeminiService.generateFlashcards(
@@ -173,6 +183,34 @@ class CreateViewModel : ViewModel() {
 
             if (result != null && !result.startsWith("Error:") && !result.startsWith("Chunk failures:")) {
                 setGeneratedJsonResult(result)
+                
+                // --- BRIDGE TO ROOM DATABASE ---
+                try {
+                    val itemType = object : TypeToken<List<FlashcardItem>>() {}.type
+                    val flashcards: List<FlashcardItem> = Gson().fromJson(result, itemType)
+                    _itemCount.value = flashcards.size
+                    
+                    val entities = flashcards.map { item ->
+                        WordEntity(
+                            type = item.type,
+                            item = item.item,
+                            reading = item.reading,
+                            meaning_en = item.meaning_en,
+                            meaning_id = item.meaning_id,
+                            example_sentence = item.example_sentence
+                        )
+                    }
+                    
+                    // Insert into Room (Repository uses WordDao internally)
+                    repository.insertWords(entities)
+                    
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        setErrorLog("Gagal menyimpan ke database: ${e.localizedMessage}")
+                    }
+                }
+                // -------------------------------
+
                 updateNotification(context, 0, 0, isFinished = true)
             } else {
                 setGeneratedJsonResult(result ?: "Error: Gagal memproses data AI.")
@@ -183,4 +221,13 @@ class CreateViewModel : ViewModel() {
         }
     }
 
+    class Factory(private val repository: WordRepository) : androidx.lifecycle.ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+            if (modelClass.isAssignableFrom(CreateViewModel::class.java)) {
+                return CreateViewModel(repository) as T
+            }
+            throw IllegalArgumentException("Unknown ViewModel class")
+        }
+    }
 }

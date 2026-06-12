@@ -18,14 +18,16 @@ object ExportHelper {
                 // Extract fields
                 val item = jsonObject.optString("item", "").clean()
                 val reading = jsonObject.optString("reading", "").clean()
-                val meaning = jsonObject.optString("meaning", "").clean()
+                val meaningEn = jsonObject.optString("meaning_en", "").clean()
+                val meaningId = jsonObject.optString("meaning_id", "").clean()
                 val exampleSentence = jsonObject.optString("example_sentence", "").clean()
                 val type = jsonObject.optString("type", "").clean()
 
-                // Append as a TSV row: item [TAB] reading [TAB] meaning [TAB] example [TAB] type [NEWLINE]
+                // Append as a TSV row: item [TAB] reading [TAB] meaning_en [TAB] meaning_id [TAB] example [TAB] type [NEWLINE]
                 tsvBuilder.append(item).append("\t")
                     .append(reading).append("\t")
-                    .append(meaning).append("\t")
+                    .append(meaningEn).append("\t")
+                    .append(meaningId).append("\t")
                     .append(exampleSentence).append("\t")
                     .append(type).append("\n")
             }

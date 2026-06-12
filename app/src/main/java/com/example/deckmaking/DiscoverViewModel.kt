@@ -15,7 +15,18 @@ sealed class FileState {
     data class Error(val message: String) : FileState()
 }
 
+sealed class DiscoverState {
+    object Loading : DiscoverState()
+    object SlowWarning : DiscoverState()
+    data class Success(val animeList: List<AnimeEntry>) : DiscoverState()
+    data class Error(val message: String) : DiscoverState()
+    data class Timeout(val message: String) : DiscoverState()
+}
+
 class DiscoverViewModel : ViewModel() {
+
+    private val _discoverState = MutableStateFlow<DiscoverState>(DiscoverState.Loading)
+    val discoverState: StateFlow<DiscoverState> = _discoverState.asStateFlow()
 
     // Removed hardcoded mock list and replaced with a StateFlow for fetched data
     private val _allAnime = MutableStateFlow<List<AnimeEntry>>(emptyList())
@@ -46,15 +57,31 @@ class DiscoverViewModel : ViewModel() {
         fetchAllAnime()
     }
 
-    private fun fetchAllAnime() {
+    fun fetchAllAnime() {
         viewModelScope.launch {
+            _discoverState.value = DiscoverState.Loading
+            
+            // Job untuk memicu peringatan koneksi lambat setelah 20 detik
+            val warningJob = launch {
+                kotlinx.coroutines.delay(20000L)
+                if (_discoverState.value == DiscoverState.Loading) {
+                    _discoverState.value = DiscoverState.SlowWarning
+                }
+            }
+
             try {
-                // Fetching real list from VPS backend
-                val result = SubtitleClient.service.getAllAnime()
-                _allAnime.value = result
+                // Timeout ketat 60 detik
+                kotlinx.coroutines.withTimeout(60000L) {
+                    val result = SubtitleClient.service.getAllAnime()
+                    warningJob.cancel()
+                    _allAnime.value = result
+                    _discoverState.value = DiscoverState.Success(result)
+                }
+            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                _discoverState.value = DiscoverState.Timeout("Timeout / Cek koneksi internet Anda")
             } catch (e: Exception) {
-                Log.e("DiscoverViewModel", "Failed to fetch anime list from backend", e)
-                // Basic error handling - list remains empty or could be handled via a UI state
+                warningJob.cancel()
+                _discoverState.value = DiscoverState.Error(e.localizedMessage ?: "Gagal memuat data")
             }
         }
     }

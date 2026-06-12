@@ -1,17 +1,24 @@
 package com.example.deckmaking
 
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
@@ -28,6 +35,7 @@ fun DiscoverScreen(
     val selectedType by viewModel.selectedType.collectAsState()
     val animeList by viewModel.filteredAnimeList.collectAsState()
     val fileState by viewModel.fileState.collectAsState()
+    val discoverState by viewModel.discoverState.collectAsState()
 
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState()
@@ -79,7 +87,7 @@ fun DiscoverScreen(
                     colors = OutlinedTextFieldDefaults.colors(
                         unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                         focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        unfocusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
+                        unfocusedBorderColor = Color.Transparent,
                         focusedBorderColor = MaterialTheme.colorScheme.primary
                     )
                 )
@@ -103,21 +111,73 @@ fun DiscoverScreen(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Anime List
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(
-                        bottom = contentPadding.calculateBottomPadding() + 32.dp
-                    )
-                ) {
-                    items(animeList) { anime ->
-                        AnimeListItem(anime) {
-                            selectedAnime = anime
-                            viewModel.fetchFiles(anime)
-                            showSheet = true
+                // Connection Warning
+                if (discoverState is DiscoverState.SlowWarning) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = "Koneksi internet lambat, pastikan jaringan Anda stabil...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
                         }
                     }
+                }
+
+                // Anime List Content
+                when (discoverState) {
+                    is DiscoverState.Loading, is DiscoverState.SlowWarning -> {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding() + 32.dp)
+                        ) {
+                            items(8) {
+                                SkeletonListItem()
+                            }
+                        }
+                    }
+                    is DiscoverState.Success -> {
+                        if (animeList.isEmpty()) {
+                            EmptySearchState()
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding() + 32.dp)
+                            ) {
+                                items(animeList) { anime ->
+                                    AnimeListItem(anime) {
+                                        selectedAnime = anime
+                                        viewModel.fetchFiles(anime)
+                                        showSheet = true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    is DiscoverState.Timeout, is DiscoverState.Error -> {
+                        val message = when (val state = discoverState) {
+                            is DiscoverState.Timeout -> state.message
+                            is DiscoverState.Error -> state.message
+                            else -> "Terjadi kesalahan"
+                        }
+                        ErrorState(message) {
+                            viewModel.fetchAllAnime()
+                        }
+                    }
+                    else -> {}
                 }
             }
         }
@@ -165,7 +225,7 @@ fun DiscoverScreen(
                     colors = OutlinedTextFieldDefaults.colors(
                         unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                         focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        unfocusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
+                        unfocusedBorderColor = Color.Transparent,
                         focusedBorderColor = MaterialTheme.colorScheme.primary
                     )
                 )
@@ -267,6 +327,98 @@ fun DiscoverScreen(
 }
 
 @Composable
+fun SkeletonListItem() {
+    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 0.7f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "alpha"
+    )
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(72.dp),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(32.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = alpha)
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 24.dp)
+                .fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(20.dp)
+                    .clip(MaterialTheme.shapes.small)
+                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f))
+            )
+            Spacer(modifier = Modifier.width(24.dp))
+            Box(
+                modifier = Modifier
+                    .size(width = 40.dp, height = 24.dp)
+                    .clip(MaterialTheme.shapes.small)
+                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f))
+            )
+        }
+    }
+}
+
+@Composable
+fun ErrorState(message: String, onRetry: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            Icons.Default.Warning,
+            contentDescription = null,
+            modifier = Modifier.size(64.dp),
+            tint = MaterialTheme.colorScheme.error
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyLarge,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        Button(
+            onClick = onRetry,
+            shape = MaterialTheme.shapes.large
+        ) {
+            Icon(Icons.Default.Refresh, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Coba Lagi")
+        }
+    }
+}
+
+@Composable
+fun EmptySearchState() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "Tidak ada anime ditemukan.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
 fun AnimeListItem(anime: AnimeEntry, onClick: () -> Unit) {
     Surface(
         modifier = Modifier
@@ -287,7 +439,7 @@ fun AnimeListItem(anime: AnimeEntry, onClick: () -> Unit) {
             trailingContent = {
                 TypeBadge(type = anime.type)
             },
-            colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
         )
     }
 }

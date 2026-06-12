@@ -1,11 +1,12 @@
-import java.util.Properties // Tambahan 1: Import Properties untuk membaca file
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.ksp)
 }
 
-// Tambahan 2: Logika untuk membaca nilai GEMINI_API_KEY dari local.properties
 val properties = Properties()
 val localPropertiesFile = rootProject.file("local.properties")
 if (localPropertiesFile.exists()) {
@@ -13,24 +14,23 @@ if (localPropertiesFile.exists()) {
 }
 val geminiApiKey = properties.getProperty("GEMINI_API_KEY") ?: ""
 
+kotlin {
+    jvmToolchain(21)
+}
+
 android {
     namespace = "com.example.deckmaking"
-    compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
-    }
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.example.deckmaking"
         minSdk = 27
-        targetSdk = 36
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Tambahan 3: Menyuntikkan API Key ke dalam class BuildConfig buatan sistem
         buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
     }
 
@@ -44,12 +44,14 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
+
+    // Blok kotlinOptions DIHAPUS karena jvmToolchain(21) di atas sudah mewakilinya
+
     buildFeatures {
         compose = true
-        // Tambahan 4: Mengaktifkan fitur generasi file BuildConfig
         buildConfig = true
     }
 }
@@ -75,7 +77,7 @@ dependencies {
     // Google Gemini AI SDK
     implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
 
-    // Coroutines untuk menjalankan proses AI di background agar UI tidak freeze
+    // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
     // DataStore
@@ -92,4 +94,9 @@ dependencies {
 
     // Coil for Image Loading
     implementation("io.coil-kt:coil-compose:2.6.0")
+
+    // Room Database
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
 }
